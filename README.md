@@ -16,7 +16,6 @@ When run in an interactive terminal, the application displays a rich TUI with:
 
 When run in Docker or with output redirection:
 - Structured Rich console logging
-- Emoji-based status indicators
 - Color-coded log levels
 - Full traceback on errors
 
