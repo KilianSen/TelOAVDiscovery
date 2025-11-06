@@ -3,14 +3,6 @@
 This repository contains a docker container, that automatically discovers OPCUA Variables from a given OPCUA Server
 and creates/updates a Telegraf configuration file with the discovered variables.
 
-## Features
-
-✨ **Rich Terminal UI** - Interactive split-screen interface when running in a terminal
-📊 **Live Monitoring** - Real-time display of discovered variables and their types
-📝 **Smart Logging** - Structured logging with emoji indicators and color coding
-🔄 **Auto-Discovery** - Continuous polling support for dynamic environments
-🐳 **Docker Ready** - Automatic TTY detection, works seamlessly in containers
-
 ### TUI Mode (Interactive Terminal)
 
 When run in an interactive terminal, the application displays a rich TUI with:
@@ -27,9 +19,6 @@ When run in Docker or with output redirection:
 - Emoji-based status indicators
 - Color-coded log levels
 - Full traceback on errors
-
-For detailed TUI features, see [TUI_FEATURES_UPDATED.md](TUI_FEATURES_UPDATED.md)
-For logging improvements, see [LOGGING_IMPROVEMENTS.md](LOGGING_IMPROVEMENTS.md)
 
 ## Usage
 
