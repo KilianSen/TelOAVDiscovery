@@ -181,8 +181,8 @@ def generate_tui_layout() -> Layout:
 
     # Create header
     header = Panel(
-        Text("TelOAV Discovery - OPC UA Node Monitor", justify="center", style="bold cyan"),
-        style="bold white on blue"
+        Text("TelOAV Discovery - OPC UA Node Monitor", justify="center", style="bold white"),
+        style="bold white"
     )
 
     # Create status info
