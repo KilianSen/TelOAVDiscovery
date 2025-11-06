@@ -1,64 +1,26 @@
 import asyncio
-import dataclasses
-import json
 import tomllib
-import os
 from dataclasses import dataclass
+from typing import Literal
 
 import tomli_w
 from asyncua import Client, ua
-import argparse
 
-from typing_extensions import Literal
+from Config import config
 
 INPUT_TYPES: set[Literal["opcua_listener", "opcua"]] = {"opcua_listener", "opcua"}
 
 @dataclass
-class Config:
-    POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling
+class ServiceConfig:
+    """
+    Service configuration dataclass
+    Configures how TelOAVDiscovery operates
+
+    All values can be overridden via environment variables, or --config file.(toml/json)
+    """
+    POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling (only run once)
     TELEGRAF_CONFIG_PATH_IN: str = "./input/telegraf.conf"
     TELEGRAF_CONFIG_PATH_OUT: str = "./output/telegraf.conf"
-
-def parse_configuration() -> Config:
-
-    config: dict = {}
-
-    # Read cli args for --config
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, help='Path to configuration TOML file', required=False)
-    args = parser.parse_args()
-    config_path = args.config
-
-    if config_path is not None:
-        # Load configuration from specified TOML file
-        with open(config_path, "rb") as f:
-            toml_config = tomllib.load(f)
-            for k, v in toml_config.items():
-                config[k] = v
-
-    # noinspection PyUnresolvedReferences
-    dc_fields = Config.__dataclass_fields__
-
-    for k in dc_fields.keys():
-
-        if k == "__dataclass_fields__":
-            continue # Skip internal dataclass field
-
-        # Set default value from dataclass, if not already set by TOML Config
-        if dc_fields[k].default is not dataclasses.MISSING and k not in config:
-            config[k] = dc_fields[k].default
-
-        # Override with value from environment variable, if exists
-        env_value = os.getenv(k)
-        if env_value is not None:
-            config[k] = env_value
-
-        # If key is still missing, raise error
-        if k not in config:
-            raise ValueError(f"Missing configuration for key: {k}")
-
-    # Parse config dictionary into Config dataclass
-    return Config(**config)
 
 def endpoints_from_config(toml_config: dict) -> list[str]:
     inputs = toml_config.get("inputs", {})
@@ -119,42 +81,46 @@ async def discover_nodes(endpoint: str) -> list[dict]:
 
 
 async def main_async():
-    config = parse_configuration()
-    print("Configuration:", config)
+    service_config: ServiceConfig = config(ServiceConfig)
+    print("Configuration:", service_config)
 
     async def fetch_and_update():
-        with open(config.TELEGRAF_CONFIG_PATH_IN, "rb") as f:
+        with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f:
             toml_config = tomllib.load(f)
 
         endpoints_to_monitor = endpoints_from_config(toml_config)
 
-        for idx, endpoint in enumerate(endpoints_to_monitor):
-            nodes = await discover_nodes(endpoint)
+        discovered_nodes_by_endpoint = {}
+        for endpoint in endpoints_to_monitor:
+            discovered_nodes_by_endpoint[endpoint] = await discover_nodes(endpoint)
 
-            if not nodes or len(nodes) == 0:
-                print(f"No nodes discovered for endpoint {endpoint}, skipping update.")
+        inputs = toml_config.get("inputs", {})
+        for input_type in INPUT_TYPES:
+            if input_type not in inputs:
                 continue
 
-            if "opcua_listener" in toml_config.get("inputs", {}):
-                toml_config["inputs"]["opcua_listener"][idx]["nodes"] = nodes
-            if "opcua" in toml_config.get("inputs", {}):
-                 toml_config["inputs"]["opcua"][idx]["nodes"] = nodes
+            for config_block in inputs.get(input_type, []):
+                endpoint = config_block.get("endpoint")
+                if endpoint and endpoint in discovered_nodes_by_endpoint:
+                    nodes = discovered_nodes_by_endpoint[endpoint]
+                    if nodes:
+                        config_block["nodes"] = nodes
+                    else:
+                        print(f"No nodes discovered for endpoint {endpoint}, skipping update.")
 
         try:
-            with open(config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
+            with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
                 tomli_w.dump(toml_config, f)
-            print(f"Updated telegraf config written to {config.TELEGRAF_CONFIG_PATH_OUT}")
-        except ImportError:
-            print("Could not write config, 'toml' library not installed. Please install with 'pip install toml'")
+            print(f"Updated telegraf config written to {service_config.TELEGRAF_CONFIG_PATH_OUT}")
         except Exception as e:
             print(f"Error writing config file: {e}")
 
 
-    if config.POLLING_INTERVAL > 0:
+    if service_config.POLLING_INTERVAL > 0:
         while True:
             await fetch_and_update()
-            print(f"Waiting for {config.POLLING_INTERVAL} seconds before next poll...")
-            await asyncio.sleep(config.POLLING_INTERVAL)
+            print(f"Waiting for {service_config.POLLING_INTERVAL} seconds before next poll...")
+            await asyncio.sleep(service_config.POLLING_INTERVAL)
     else:
         await fetch_and_update()
 
