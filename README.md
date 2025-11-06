@@ -41,6 +41,23 @@ python src/main.py
 
 This will show the Rich TUI with split-screen and live logs.
 
+### Docker Build
+
+Build the Docker image:
+
+```bash
+docker build -t teloavdiscovery:latest .
+```
+
+Run the container:
+
+```bash
+docker run -v ./test/telegraf.conf:/input/telegraf.conf:ro \
+           -v ./output:/output:rw \
+           -e POLLING_INTERVAL=60 \
+           teloavdiscovery:latest
+```
+
 ### Docker Compose (Production)
 
 It is only recommended to use this tool within a docker compose setup alongside Telegraf.
@@ -60,7 +77,9 @@ services:
       - --watch-config notify
       
   opcua_discovery:
-    image: ""
+    build:
+        context: .
+        dockerfile: Dockerfile
     container_name: telegraf_opcua_discovery
     environment:
       - OPCUA_SERVER_URL=opc.tcp://your-opcua-server:4840
@@ -81,12 +100,3 @@ Key settings:
 - `POLLING_INTERVAL`: Seconds between discovery runs (-1 for single run)
 - `TELEGRAF_CONFIG_PATH_IN`: Input Telegraf configuration path
 - `TELEGRAF_CONFIG_PATH_OUT`: Output Telegraf configuration path
-
-## Requirements
-
-- Python 3.11+
-- rich~=13.7.0
-- asyncua~=1.1.8
-- tomli-w
-
-Install with: `pip install -r requirements.txt`
