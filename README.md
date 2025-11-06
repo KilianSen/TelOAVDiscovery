@@ -3,6 +3,12 @@
 This repository contains a docker container, that automatically discovers OPCUA Variables from a given OPCUA Server
 and creates/updates a Telegraf configuration file with the discovered variables.
 
+## Features
+- Automatic discovery of OPCUA Variables from a specified OPCUA Server
+- Generation and updating of Telegraf configuration files
+- Takes input Telegraf config as a template and outputs updated config
+- Supports continuous discovery mode for dynamic environments
+
 ### TUI Mode (Interactive Terminal)
 
 When run in an interactive terminal, the application displays a rich TUI with:
