@@ -71,13 +71,10 @@ services:
       - --watch-config notify
       
   opcua_discovery:
-    build:
-        context: .
-        dockerfile: Dockerfile
+    image: ghcr.io/kiliansen/teloavdiscovery:latest
     container_name: telegraf_opcua_discovery
     environment:
-      - OPCUA_SERVER_URL=opc.tcp://your-opcua-server:4840
-      - CONTINUOUS_DISCOVERY=true
+        - POLLING_INTERVAL=1
     volumes:
       - ./telegraf.conf:/input/telegraf.conf:ro
       - telegraf_config:/output:rw

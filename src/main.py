@@ -389,6 +389,14 @@ async def main_async():
     service_config: ServiceConfig = config(ServiceConfig)
     polling_interval = service_config.POLLING_INTERVAL
 
+    # Initially copy existing config to output path
+    try:
+        with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f_in, open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f_out:
+            f_out.write(f_in.read())
+    except Exception as e:
+        logger.error("Failed to copy initial config file: %s", e)
+        return
+
     # Detect if we're in an interactive TTY
     use_tui = sys.stdout.isatty() and sys.stdin.isatty()
 
