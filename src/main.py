@@ -159,9 +159,7 @@ async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
 
         return []
     except Exception as e:
-        logger.error(f"Unexpected error discovering nodes on {endpoint}: {e}")
-        # Print stack trace in debug mode
-        logger.debug("Exception details:", exc_info=True)
+        logger.error(f"Unexpected error discovering nodes on {endpoint}: {e}", exc_info=True)
 
         if use_tui:
             endpoint_stats[endpoint] = {
