@@ -1,6 +1,6 @@
 FROM python:3.14-slim
 LABEL authors="KilianSen"
-LABEL description="Telegraf OPCUA Discovery Service - Automatically discovers OPCUA variables"
+LABEL org.opencontainers.image.source="https://https://github.com/KilianSen/TelOAVDiscovery"
 
 # Set working directory
 WORKDIR /app
