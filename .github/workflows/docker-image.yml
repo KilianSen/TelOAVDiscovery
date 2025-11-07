@@ -22,6 +22,6 @@ jobs:
 
           - name: 'Build Inventory Image'
             run: |
-              docker build . --tag ghcr.io/KilianSen/store:latest
-              docker push ghcr.io/KilianSen/store:latest
+              docker build . --tag ghcr.io/KilianSen/TelOAVDiscovery:latest
+              docker push ghcr.io/KilianSen/TelOAVDiscovery:latest
 
