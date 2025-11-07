@@ -104,10 +104,17 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                     logger.debug(f"Failed to read data type for {browse_name.Name}: {e}")
                     data_type_name = "Unknown"
 
+
+                ## Node ID configuration
+                ## name              - field name to use in the output
+                ## namespace         - OPC UA namespace of the node (integer value 0 thru 3)
+                ## identifier_type   - OPC UA ID type (s=string, i=numeric, g=guid, b=opaque)
+                ## identifier        - OPC UA ID (tag as shown in opcua browser)
+
                 nodes_to_add.append({
                     "name": browse_name.Name,
                     "namespace": str(node_id.NamespaceIndex),
-                    "identifier_type": node_id.NodeIdType.name.lower(),
+                    "identifier_type": node_id.NodeIdType,
                     "identifier": str(node_id.Identifier),
                     "data_type": data_type_name
                 })
