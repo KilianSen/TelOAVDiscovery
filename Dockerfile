@@ -1,5 +1,7 @@
 FROM python:3.13-slim
 LABEL authors="KilianSen"
+LABEL org.opencontainers.image.authors="KilianSen"
+LABEL org.opencontainers.image.description="A OPCUA Discovery Service that generates Telegraf configuration
 LABEL org.opencontainers.image.source="https://https://github.com/KilianSen/TelOAVDiscovery"
 
 # Set working directory
