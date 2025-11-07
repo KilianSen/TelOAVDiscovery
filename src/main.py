@@ -282,7 +282,7 @@ def create_endpoint_table(endpoint: str, stats: dict) -> Panel:
     table.add_column("Variable Name", style="cyan", no_wrap=False)
     table.add_column("Namespace", style="yellow", justify="center", width=10)
     table.add_column("Identifier", style="white", no_wrap=False)
-    table.add_column("Data Type", style="green", no_wrap=False)
+    table.add_column("Identifier Type", style="green", no_wrap=False)
 
     # Add status row
     status_color = "green" if stats["status"] == "Connected" else "red"
@@ -297,7 +297,7 @@ def create_endpoint_table(endpoint: str, stats: dict) -> Panel:
                 node.get("name", "N/A"),
                 node.get("namespace", "N/A"),
                 str(node.get("identifier", "N/A")),
-                node.get("data_type", "Unknown")
+                node.get("identifier_type", "Unknown")
             )
 
         if len(nodes) > display_limit:
