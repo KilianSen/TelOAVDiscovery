@@ -449,6 +449,7 @@ async def main_async():
 
         inputs = toml_config.get("inputs", {})
         nodes_updated_count = 0
+        config_changed = False
 
         for input_type in INPUT_TYPES:
             if input_type not in inputs:
@@ -459,19 +460,29 @@ async def main_async():
                 if endpoint and endpoint in discovered_nodes_by_endpoint:
                     nodes = discovered_nodes_by_endpoint[endpoint]
                     if nodes:
-                        config_block["nodes"] = nodes
-                        nodes_updated_count += 1
-                        logger.debug("Updated configuration for endpoint: %s", endpoint)
+                        # Check if nodes have actually changed
+                        existing_nodes = config_block.get("nodes", [])
+                        if existing_nodes != nodes:
+                            config_block["nodes"] = nodes
+                            nodes_updated_count += 1
+                            config_changed = True
+                            logger.debug("Updated configuration for endpoint: %s", endpoint)
+                        else:
+                            logger.debug("No changes detected for endpoint: %s", endpoint)
                     else:
                         logger.warning("No nodes discovered for endpoint %s, skipping update", endpoint)
 
-        try:
-            with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
-                tomli_w.dump(toml_config, f)
-            logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
-                       service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
-        except Exception as e:
-            logger.error("Error writing config file: %s", e)
+        # Only write to file if there were actual changes
+        if config_changed:
+            try:
+                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
+                    tomli_w.dump(toml_config, f)
+                logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
+                           service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
+            except Exception as e:
+                logger.error("Error writing config file: %s", e)
+        else:
+            logger.info("No configuration changes detected, skipping file write")
 
         # Set next update time if polling
         if service_config.POLLING_INTERVAL > 0:
