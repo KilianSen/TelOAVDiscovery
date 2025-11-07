@@ -107,7 +107,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                 nodes_to_add.append({
                     "name": browse_name.Name,
                     "namespace": str(node_id.NamespaceIndex),
-                    "identifier_type": str(node_id.NodeIdType),
+                    "identifier_type": node_id.NodeIdType.name.lower(),
                     "identifier": str(node_id.Identifier),
                     "data_type": data_type_name
                 })
