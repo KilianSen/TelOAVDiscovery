@@ -395,7 +395,6 @@ async def main_async():
             f_out.write(f_in.read())
     except Exception as e:
         logger.error("Failed to copy initial config file: %s", e)
-        return
 
     # Detect if we're in an interactive TTY
     use_tui = sys.stdout.isatty() and sys.stdin.isatty()
