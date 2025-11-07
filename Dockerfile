@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 LABEL authors="KilianSen"
 LABEL description="Telegraf OPCUA Discovery Service - Automatically discovers OPCUA variables"
 
