@@ -122,7 +122,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
 async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
     global endpoint_stats, last_update_time
 
-    logger.info(f"🔍 Starting discovery on endpoint: {endpoint}")
+    logger.info(f"Starting discovery on endpoint: {endpoint}")
 
     nodes_to_add = []
 
