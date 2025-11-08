@@ -388,22 +388,28 @@ def create_log_panel() -> Panel:
         padding=(0, 1)
     )
 
-def file_hash(path: str) -> str:
-    sha1 = hashlib.sha1()
-    with open(path, "rb") as f:
-        while chunk := f.read(8192):
-            sha1.update(chunk)
-    return sha1.hexdigest()
+def file_size(path: str) -> int:
+    """Get file size in bytes"""
+    import os
+    return os.path.getsize(path)
 
-def file_read(path: str) -> bytes:
-    with open(path, "rb") as f:
-        return f.read()
+def file_compare(path1: str, path2: str, mode: Literal["size", "content"] = "content") -> bool:
+    """Compare two files by size or content hash"""
+    if mode == "size":
+        return file_size(path1) == file_size(path2)
+    elif mode == "content":
+        hash1 = hashlib.sha1()
+        hash2 = hashlib.sha1()
 
-def file_compare(path1: str, path2: str, mode: Literal["content", "hash"] = "hash") -> bool:
-    if mode == "content":
-        return file_read(path1) == file_read(path2)
+        with open(path1, "rb") as f1, open(path2, "rb") as f2:
+            while chunk := f1.read(8192):
+                hash1.update(chunk)
+            while chunk := f2.read(8192):
+                hash2.update(chunk)
+
+        return hash1.digest() == hash2.digest()
     else:
-        return file_hash(path1) == file_hash(path2)
+        raise ValueError("Invalid comparison mode. Use 'size' or 'content'.")
 
 async def main_async():
     global polling_interval, next_update_time
@@ -505,7 +511,7 @@ async def main_async():
 
             # Check if output file sha1 is the same as input file sha1
             try:
-                if not file_compare(service_config.TELEGRAF_CONFIG_PATH_IN, service_config.TELEGRAF_CONFIG_PATH_OUT, mode="content"):
+                if not file_compare(service_config.TELEGRAF_CONFIG_PATH_IN, service_config.TELEGRAF_CONFIG_PATH_OUT, mode="size"):
                     logger.warning("Output config hash does not match input config hash, reapplying changes")
                     config_changed = True
             except Exception as e:
