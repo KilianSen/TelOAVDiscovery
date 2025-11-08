@@ -395,6 +395,16 @@ def file_hash(path: str) -> str:
             sha1.update(chunk)
     return sha1.hexdigest()
 
+def file_read(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
+
+def file_compare(path1: str, path2: str, mode: Literal["content", "hash"] = "hash") -> bool:
+    if mode == "content":
+        return file_read(path1) == file_read(path2)
+    else:
+        return file_hash(path1) == file_hash(path2)
+
 async def main_async():
     global polling_interval, next_update_time
 
@@ -495,9 +505,7 @@ async def main_async():
 
             # Check if output file sha1 is the same as input file sha1
             try:
-                input_hash = file_hash(service_config.TELEGRAF_CONFIG_PATH_IN)
-                output_hash = file_hash(service_config.TELEGRAF_CONFIG_PATH_OUT)
-                if input_hash != output_hash:
+                if not file_compare(service_config.TELEGRAF_CONFIG_PATH_IN, service_config.TELEGRAF_CONFIG_PATH_OUT, mode="content"):
                     logger.warning("Output config hash does not match input config hash, reapplying changes")
                     config_changed = True
             except Exception as e:
