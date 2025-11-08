@@ -26,6 +26,7 @@ INPUT_TYPES: set[Literal["opcua_listener", "opcua"]] = {"opcua_listener", "opcua
 endpoint_stats: dict = {}
 last_update_time: datetime | None = None
 next_update_time: datetime | None = None
+last_config_in: bytes | None = None
 polling_interval: int = 0
 log_messages: deque = deque(maxlen=100)  # Store last 100 log messages
 
@@ -412,7 +413,7 @@ def file_compare(path1: str, path2: str, mode: Literal["size", "content"] = "con
         raise ValueError("Invalid comparison mode. Use 'size' or 'content'.")
 
 async def main_async():
-    global polling_interval, next_update_time
+    global polling_interval, next_update_time, last_config_in
 
     service_config: ServiceConfig = config(ServiceConfig)
     polling_interval = service_config.POLLING_INTERVAL
@@ -449,12 +450,21 @@ async def main_async():
 
     async def fetch_and_update():
         global next_update_time
+        global last_config_in
+        config_changed = False
 
         logger.info("Reading Telegraf configuration from %s", service_config.TELEGRAF_CONFIG_PATH_IN)
 
         try:
+            data = None
             with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f:
-                toml_config = tomllib.load(f)
+                data = f.read()
+            toml_config = tomllib.loads(data.decode("utf-8"))
+
+            if data != last_config_in:
+                last_config_in = data
+                config_changed = True
+                logger.info("Detected change in input configuration file")
         except FileNotFoundError:
             logger.error("Configuration file not found: %s", service_config.TELEGRAF_CONFIG_PATH_IN)
             return
@@ -471,7 +481,6 @@ async def main_async():
 
         inputs = toml_config.get("inputs", {})
         nodes_updated_count = 0
-        config_changed = False
 
         for input_type in INPUT_TYPES:
             if input_type not in inputs:
@@ -494,30 +503,17 @@ async def main_async():
                     else:
                         logger.warning("No nodes discovered for endpoint %s, skipping update", endpoint)
 
-        # Only write to file if there were actual changes
-        backcheck = True
-        while backcheck or config_changed:
-            backcheck = False
-            if config_changed:
-                try:
-                    with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
-                        tomli_w.dump(toml_config, f)
-                    logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
-                               service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
-                except Exception as e:
-                    logger.error("Error writing config file: %s", e)
-                config_changed = False
-            else:
-                logger.info("No configuration changes detected, skipping file write")
 
-            # Check if output file sha1 is the same as input file sha1
+        if config_changed:
             try:
-                if not file_compare(service_config.TELEGRAF_CONFIG_PATH_IN, service_config.TELEGRAF_CONFIG_PATH_OUT, mode="size"):
-                    logger.warning("Output config hash does not match input config hash, reapplying changes")
-                    config_changed = True
+                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
+                    tomli_w.dump(toml_config, f)
+                logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
+                            service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
             except Exception as e:
-                logger.error("Error comparing config file hashes: %s", e)
-                config_changed = True
+                logger.error("Error writing config file: %s", e)
+        else:
+            logger.info("No configuration changes detected, skipping file write")
 
         # Set next update time if polling
         if service_config.POLLING_INTERVAL > 0:
