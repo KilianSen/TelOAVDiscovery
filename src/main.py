@@ -506,6 +506,7 @@ async def main_async():
                                service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
                 except Exception as e:
                     logger.error("Error writing config file: %s", e)
+                    config_changed = False
             else:
                 logger.info("No configuration changes detected, skipping file write")
 
