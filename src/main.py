@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from collections import deque
 
 import tomli_w
+import hashlib
 from asyncua import Client, ua
 from rich.console import Console
 from rich.layout import Layout
@@ -387,7 +388,12 @@ def create_log_panel() -> Panel:
         padding=(0, 1)
     )
 
-
+def file_hash(path: str) -> str:
+    sha1 = hashlib.sha1()
+    with open(path, "rb") as f:
+        while chunk := f.read(8192):
+            sha1.update(chunk)
+    return sha1.hexdigest()
 
 async def main_async():
     global polling_interval, next_update_time
@@ -473,16 +479,30 @@ async def main_async():
                         logger.warning("No nodes discovered for endpoint %s, skipping update", endpoint)
 
         # Only write to file if there were actual changes
-        if config_changed:
+        backcheck = True
+        while backcheck or config_changed:
+            backcheck = False
+            if config_changed:
+                try:
+                    with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
+                        tomli_w.dump(toml_config, f)
+                    logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
+                               service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
+                except Exception as e:
+                    logger.error("Error writing config file: %s", e)
+            else:
+                logger.info("No configuration changes detected, skipping file write")
+
+            # Check if output file sha1 is the same as input file sha1
             try:
-                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
-                    tomli_w.dump(toml_config, f)
-                logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
-                           service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
+                input_hash = file_hash(service_config.TELEGRAF_CONFIG_PATH_IN)
+                output_hash = file_hash(service_config.TELEGRAF_CONFIG_PATH_OUT)
+                if input_hash != output_hash:
+                    logger.warning("Output config hash does not match input config hash, reapplying changes")
+                    config_changed = True
             except Exception as e:
-                logger.error("Error writing config file: %s", e)
-        else:
-            logger.info("No configuration changes detected, skipping file write")
+                logger.error("Error comparing config file hashes: %s", e)
+                config_changed = True
 
         # Set next update time if polling
         if service_config.POLLING_INTERVAL > 0:
