@@ -446,17 +446,23 @@ async def main_async():
     if use_tui:
         # In TUI mode, use custom handler to capture logs
         tui_handler = TUILogHandler()
-        tui_handler.setLevel(logging.DEBUG)
+        tui_handler.setLevel(logging.INFO)
         logger.addHandler(tui_handler)
     else:
         # In non-TUI mode, use rich console handler
         console_handler = RichHandler(rich_tracebacks=True)
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
         logger.info("Configuration: %s", service_config)
+
+    # Get loglevel from environment variable if set
+    loglevel_env = os.getenv("LOGLEVEL", "").upper()
+    if loglevel_env in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+        logger.setLevel(getattr(logging, loglevel_env))
+        logger.info("Log level set to %s from environment variable", loglevel_env)
 
     console = Console() if use_tui else None
 
@@ -478,18 +484,19 @@ async def main_async():
                 last_config_in = data
                 config_changed = True
                 logger.info("Detected change in input configuration file")
-
-            if os.path.exists(service_config.TELEGRAF_CONFIG_PATH_OUT):
-                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
-                    output_toml = tomllib.load(f)
-            else:
-                output_toml = None
-                logger.info("Output configuration file does not exist, will create new one")
-                config_changed = True
-
         except FileNotFoundError:
             logger.error("Configuration file not found: %s", service_config.TELEGRAF_CONFIG_PATH_IN)
             return
+        except Exception as e:
+            logger.error("Failed to read configuration: %s", e)
+            return
+
+        try:
+            with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
+                output_toml = tomllib.load(f)
+        except FileNotFoundError:
+            output_toml = None
+            config_changed = True
         except Exception as e:
             logger.error("Failed to read configuration: %s", e)
             return
@@ -508,19 +515,14 @@ async def main_async():
             if input_type not in inputs:
                 continue
 
-            for config_block in inputs.get(input_type, []):
+            for idx, config_block in enumerate(inputs.get(input_type, [])):
                 endpoint = config_block.get("endpoint")
                 if endpoint and endpoint in discovered_nodes_by_endpoint:
                     nodes = discovered_nodes_by_endpoint[endpoint]
                     if nodes:
-                        # Check if nodes have actually changed
-                        existing_nodes = []
-                        # Find existing nodes in output config if available to compare against
-                        for out_block in filter(lambda x: x.get("endpoint") == endpoint, output_toml.get(input_type, []) if output_toml else []):
-                            existing_nodes = out_block.get("nodes", [])
-                            break
+                        # Check if nodes differ from existing config
 
-
+                        existing_nodes = output_toml.get("inputs", {}).get(input_type, [{} for _ in range(idx)])[idx].get("nodes", [])
 
                         if existing_nodes != nodes:
                             config_block["nodes"] = nodes
