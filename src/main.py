@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -33,6 +34,13 @@ log_messages: deque = deque(maxlen=100)  # Store last 100 log messages
 # Setup logger
 logger = logging.getLogger("TelOAVDiscovery")
 
+# Global flag for graceful shutdown
+shutdown_event = asyncio.Event()
+
+def handle_shutdown(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
 
 class TUILogHandler(logging.Handler):
     """Custom log handler that stores messages for TUI display"""
@@ -109,7 +117,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
 
                 ## Node ID configuration
                 ## name              - field name to use in the output
-                ## namespace         - OPC UA namespace of the node (integer value 0 thru 3)
+                ## namespace         - OPC UA namespace of the node (integer value 0 through 3)
                 ## identifier_type   - OPC UA ID type (s=string, i=numeric, g=guid, b=opaque)
                 ## identifier        - OPC UA ID (tag as shown in opcua browser)
 
@@ -413,7 +421,10 @@ def file_compare(path1: str, path2: str, mode: Literal["size", "content"] = "con
         raise ValueError("Invalid comparison mode. Use 'size' or 'content'.")
 
 async def main_async():
-    global polling_interval, next_update_time, last_config_in
+    global polling_interval, next_update_time, last_config_in, shutdown_event
+
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
 
     service_config: ServiceConfig = config(ServiceConfig)
     polling_interval = service_config.POLLING_INTERVAL
@@ -451,6 +462,7 @@ async def main_async():
     async def fetch_and_update():
         global next_update_time
         global last_config_in
+        global shutdown_event
         config_changed = False
 
         logger.info("Reading Telegraf configuration from %s", service_config.TELEGRAF_CONFIG_PATH_IN)
@@ -524,13 +536,13 @@ async def main_async():
     if use_tui and service_config.POLLING_INTERVAL > 0:
         # TUI mode with polling - use higher refresh rate for smooth countdown
         with Live(generate_tui_layout(), console=console, refresh_per_second=4, screen=True) as live:
-            while True:
+            while not shutdown_event.is_set():
                 await fetch_and_update()
 
                 # Update UI every 0.25 seconds for smooth countdown
                 for _ in range(service_config.POLLING_INTERVAL * 4):
                     live.update(generate_tui_layout())
-                    await asyncio.sleep(0.25)
+                    await asyncio.wait_for(shutdown_event.wait(), timeout=0.25)
     elif use_tui:
         # TUI mode, single run
         await fetch_and_update()
@@ -543,10 +555,10 @@ async def main_async():
             input()
     elif service_config.POLLING_INTERVAL > 0:
         # Normal logging mode with polling
-        while True:
+        while not shutdown_event.is_set():
             await fetch_and_update()
             logger.info("Waiting for %d seconds before next poll...", service_config.POLLING_INTERVAL)
-            await asyncio.sleep(service_config.POLLING_INTERVAL)
+            await asyncio.wait_for(shutdown_event.wait(), timeout=service_config.POLLING_INTERVAL)
     else:
         # Normal logging mode, single run
         await fetch_and_update()
