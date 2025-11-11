@@ -544,7 +544,10 @@ async def main_async():
                     if shutdown_event.is_set():
                         break
                     live.update(generate_tui_layout())
-                    await asyncio.wait_for(shutdown_event.wait(), timeout=0.25)
+                    try:
+                        await asyncio.wait_for(shutdown_event.wait(), timeout=0.25)
+                    except asyncio.TimeoutError:
+                        pass
     elif use_tui:
         # TUI mode, single run
         await fetch_and_update()
@@ -560,7 +563,10 @@ async def main_async():
         while not shutdown_event.is_set():
             await fetch_and_update()
             logger.info("Waiting for %d seconds before next poll...", service_config.POLLING_INTERVAL)
-            await asyncio.wait_for(shutdown_event.wait(), timeout=service_config.POLLING_INTERVAL)
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=service_config.POLLING_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
     else:
         # Normal logging mode, single run
         await fetch_and_update()
