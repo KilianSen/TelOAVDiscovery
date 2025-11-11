@@ -450,7 +450,7 @@ async def main_async():
     else:
         # In non-TUI mode, use rich console handler
         console_handler = RichHandler(rich_tracebacks=True)
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
