@@ -1,4 +1,5 @@
 import asyncio
+import os
 import signal
 import sys
 import tomllib
@@ -464,6 +465,7 @@ async def main_async():
         global last_config_in
         global shutdown_event
         config_changed = False
+        output_toml = None
 
         logger.info("Reading Telegraf configuration from %s", service_config.TELEGRAF_CONFIG_PATH_IN)
 
@@ -477,6 +479,10 @@ async def main_async():
                 last_config_in = data
                 config_changed = True
                 logger.info("Detected change in input configuration file")
+
+            if os.path.exists(service_config.TELEGRAF_CONFIG_PATH_OUT):
+                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
+                    output_toml = tomllib.load(f)
         except FileNotFoundError:
             logger.error("Configuration file not found: %s", service_config.TELEGRAF_CONFIG_PATH_IN)
             return
@@ -504,7 +510,28 @@ async def main_async():
                     nodes = discovered_nodes_by_endpoint[endpoint]
                     if nodes:
                         # Check if nodes have actually changed
-                        existing_nodes = config_block.get("nodes", [])
+
+                        existing_nodes_input_config_nodes = config_block.get("nodes", [])
+                        existing_nodes_output_config_nodes = []
+                        if output_toml:
+                            o = output_toml.get(input_type, [])
+
+                            if not o:
+                                continue
+
+                            for out_block in o:
+
+                                if out_block.get("endpoint") != endpoint:
+                                    continue
+
+                                existing_nodes_output_config_nodes = out_block.get("nodes", [])
+                                break
+
+                        existing_nodes = existing_nodes_input_config_nodes
+                        if existing_nodes_output_config_nodes:
+                            existing_nodes = existing_nodes_output_config_nodes
+
+
                         if existing_nodes != nodes:
                             config_block["nodes"] = nodes
                             nodes_updated_count += 1
