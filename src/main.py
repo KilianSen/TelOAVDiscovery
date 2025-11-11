@@ -498,6 +498,8 @@ async def main_async():
                             nodes_updated_count += 1
                             config_changed = True
                             logger.debug("Updated configuration for endpoint: %s", endpoint)
+                            logger.debug(" - Previous node count: %d", len(existing_nodes))
+                            logger.debug(" - New node count: %d", len(nodes))
                         else:
                             logger.debug("No changes detected for endpoint: %s", endpoint)
                     else:
