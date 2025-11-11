@@ -541,6 +541,8 @@ async def main_async():
 
                 # Update UI every 0.25 seconds for smooth countdown
                 for _ in range(service_config.POLLING_INTERVAL * 4):
+                    if shutdown_event.is_set():
+                        break
                     live.update(generate_tui_layout())
                     await asyncio.wait_for(shutdown_event.wait(), timeout=0.25)
     elif use_tui:
