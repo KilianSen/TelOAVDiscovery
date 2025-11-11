@@ -465,7 +465,6 @@ async def main_async():
         global last_config_in
         global shutdown_event
         config_changed = False
-        output_toml = None
 
         logger.info("Reading Telegraf configuration from %s", service_config.TELEGRAF_CONFIG_PATH_IN)
 
@@ -483,6 +482,11 @@ async def main_async():
             if os.path.exists(service_config.TELEGRAF_CONFIG_PATH_OUT):
                 with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
                     output_toml = tomllib.load(f)
+            else:
+                output_toml = None
+                logger.info("Output configuration file does not exist, will create new one")
+                config_changed = True
+
         except FileNotFoundError:
             logger.error("Configuration file not found: %s", service_config.TELEGRAF_CONFIG_PATH_IN)
             return
@@ -510,26 +514,12 @@ async def main_async():
                     nodes = discovered_nodes_by_endpoint[endpoint]
                     if nodes:
                         # Check if nodes have actually changed
+                        existing_nodes = []
+                        # Find existing nodes in output config if available to compare against
+                        for out_block in filter(lambda x: x.get("endpoint") == endpoint, output_toml.get(input_type, []) if output_toml else []):
+                            existing_nodes = out_block.get("nodes", [])
+                            break
 
-                        existing_nodes_input_config_nodes = config_block.get("nodes", [])
-                        existing_nodes_output_config_nodes = []
-                        if output_toml:
-                            o = output_toml.get(input_type, [])
-
-                            if not o:
-                                continue
-
-                            for out_block in o:
-
-                                if out_block.get("endpoint") != endpoint:
-                                    continue
-
-                                existing_nodes_output_config_nodes = out_block.get("nodes", [])
-                                break
-
-                        existing_nodes = existing_nodes_input_config_nodes
-                        if existing_nodes_output_config_nodes:
-                            existing_nodes = existing_nodes_output_config_nodes
 
 
                         if existing_nodes != nodes:
