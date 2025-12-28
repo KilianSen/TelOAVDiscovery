@@ -139,7 +139,10 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                     "namespace": str(node_id.NamespaceIndex),
                     "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
                     "identifier": node_id.Identifier,
-                    "default_tags": f"{{id = {browse_name.Name}}}"
+                    # Tagging with default_tags as toml dictionary
+                    "default_tags": {
+                        "id": browse_name.Name
+                    }
                 })
                 logger.debug(f"Discovered node: {browse_name.Name} (ns={node_id.NamespaceIndex})")
 
