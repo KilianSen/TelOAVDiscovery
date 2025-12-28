@@ -5,13 +5,15 @@ import sys
 import tomllib
 import traceback
 from dataclasses import dataclass
-from typing import Literal
+from enum import IntEnum
+from typing import Literal, Union
 from datetime import datetime, timedelta
 from collections import deque
 
 import tomli_w
 import hashlib
 from asyncua import Client, ua
+from asyncua.ua import Int32, String, Guid, ByteString, Int16
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
@@ -116,6 +118,10 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                     logger.debug(f"Failed to read data type for {browse_name.Name}: {e}")
                     data_type_name = "Unknown"
 
+                def get_node_id(identifier: Union[Int32, String, Guid, ByteString], namespace_index: Int16):
+                    if isinstance(identifier, int):
+                        return 'i'
+                    return 'b'
 
                 ## Node ID configuration
                 ## name              - field name to use in the output
@@ -125,8 +131,8 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                 nodes_to_add.append({
                     "name": browse_name.Name,
                     "namespace": str(node_id.NamespaceIndex),
-                    "identifier_type": "OPAQUE_3",
-                    "identifier": str(node_id.Identifier),
+                    "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
+                    "identifier": node_id.Identifier,
                 })
                 logger.debug(f"Discovered node: {browse_name.Name} (ns={node_id.NamespaceIndex})")
 
