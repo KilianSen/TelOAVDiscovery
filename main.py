@@ -605,12 +605,7 @@ async def main_async():
         # TUI mode, single run
         await fetch_and_update()
         console.print(generate_tui_layout())
-        console.print("\nDiscovery complete. Press any key to exit...")
-        try:
-            import msvcrt
-            msvcrt.getch()
-        except ImportError:
-            input()
+        console.print("\nDiscovery complete.")
     elif service_config.POLLING_INTERVAL > 0:
         # Normal logging mode with polling
         while not shutdown_event.is_set():
