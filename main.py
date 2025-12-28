@@ -254,16 +254,49 @@ def generate_tui_layout() -> Layout:
 
     # Split main area into endpoint panels
     if endpoint_stats:
-        endpoint_layouts = []
-        for endpoint, stats in endpoint_stats.items():
-            endpoint_layouts.append(Layout(name=endpoint))
+        endpoints = list(endpoint_stats.keys())
+        count = len(endpoints)
 
-        # Split main area evenly among endpoints
-        layout["main"].split_row(*endpoint_layouts)
-        # Update each endpoint panel
-        for endpoint, stats in endpoint_stats.items():
-            table = create_endpoint_table(endpoint, stats)
-            layout[endpoint].update(table)
+        # Determine grid dimensions
+        if count == 1:
+            cols = 1
+        elif count == 2:
+            cols = 2
+        elif count == 4:
+            cols = 2
+        else:
+            cols = 3
+
+        rows = (count + cols - 1) // cols
+
+        # Create row layouts
+        row_layouts = []
+        for i in range(rows):
+            row_layouts.append(Layout(name=f"row_{i}"))
+
+        layout["main"].split_column(*row_layouts)
+
+        # Populate rows
+        for i in range(rows):
+            start_idx = i * cols
+            end_idx = min(start_idx + cols, count)
+            row_endpoints = endpoints[start_idx:end_idx]
+
+            col_layouts = []
+            for endpoint in row_endpoints:
+                col_layouts.append(Layout(name=endpoint))
+
+            # Pad last row if needed to maintain column alignment
+            if len(col_layouts) < cols:
+                for j in range(cols - len(col_layouts)):
+                    col_layouts.append(Layout(name=f"dummy_{i}_{j}"))
+
+            layout[f"row_{i}"].split_row(*col_layouts)
+
+            # Update endpoint panels
+            for endpoint in row_endpoints:
+                table = create_endpoint_table(endpoint, endpoint_stats[endpoint])
+                layout[endpoint].update(table)
     else:
         layout["main"].update(Panel("No endpoints configured", style="yellow"))
 
