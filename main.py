@@ -3,6 +3,7 @@ import os
 import signal
 import sys
 import tomllib
+import traceback
 from dataclasses import dataclass
 from typing import Literal
 from datetime import datetime, timedelta
@@ -62,8 +63,8 @@ class ServiceConfig:
     All values can be overridden via environment variables, or --config file.(toml/json)
     """
     POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling (only run once)
-    TELEGRAF_CONFIG_PATH_IN: str = "./input/telegraf.conf"
-    TELEGRAF_CONFIG_PATH_OUT: str = "./output/telegraf.conf"
+    TELEGRAF_CONFIG_PATH_IN: str = "./test/telegraf.conf"
+    TELEGRAF_CONFIG_PATH_OUT: str = "./test/telegraf1.conf"
 
 def endpoints_from_config(toml_config: dict) -> list[str]:
     inputs = toml_config.get("inputs", {})
@@ -258,11 +259,7 @@ def generate_tui_layout() -> Layout:
             endpoint_layouts.append(Layout(name=endpoint))
 
         # Split main area evenly among endpoints
-        if len(endpoint_layouts) == 1:
-            layout["main"].update(endpoint_layouts[0])
-        else:
-            layout["main"].split_row(*endpoint_layouts)
-
+        layout["main"].split_row(*endpoint_layouts)
         # Update each endpoint panel
         for endpoint, stats in endpoint_stats.items():
             table = create_endpoint_table(endpoint, stats)
@@ -427,16 +424,6 @@ async def main_async():
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)
 
-    service_config: ServiceConfig = config(ServiceConfig)
-    polling_interval = service_config.POLLING_INTERVAL
-
-    # Initially copy existing config to output path
-    try:
-        with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f_in, open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f_out:
-            f_out.write(f_in.read())
-    except Exception as e:
-        logger.error("Failed to copy initial config file: %s", e)
-
     # Detect if we're in an interactive TTY
     use_tui = sys.stdout.isatty() and sys.stdin.isatty()
 
@@ -456,13 +443,27 @@ async def main_async():
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
-        logger.info("Configuration: %s", service_config)
-
     # Get loglevel from environment variable if set
     loglevel_env = os.getenv("LOGLEVEL", "").upper()
     if loglevel_env in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
         logger.setLevel(getattr(logging, loglevel_env))
         logger.info("Log level set to %s from environment variable", loglevel_env)
+
+    try:
+        service_config: ServiceConfig = config(ServiceConfig)
+        polling_interval = service_config.POLLING_INTERVAL
+        if not use_tui:
+            logger.info("Configuration: %s", service_config)
+    except Exception as e:
+        logger.critical("Failed to load configuration: %s", e, exc_info=True)
+        return
+
+    # Initially copy existing config to output path
+    try:
+        with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f_in, open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f_out:
+            f_out.write(f_in.read())
+    except Exception as e:
+        logger.error("Failed to copy initial config file: %s", e)
 
     console = Console() if use_tui else None
 
@@ -592,9 +593,11 @@ async def main_async():
 
 
 if __name__ == '__main__':
+    print("Starting TelOAVDiscovery...", flush=True)
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:
         logger.info("Interrupted by user, exiting gracefully...")
     except Exception as e:
+        traceback.print_exc()
         logger.error("Fatal error: %s", e, exc_info=True)

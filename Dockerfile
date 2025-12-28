@@ -19,7 +19,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 #
-COPY test/ ../input/
+COPY test/ /input/
 
 # Copy application source
 COPY . .
@@ -28,7 +28,8 @@ COPY . .
 RUN mkdir -p /input /output
 
 # Set environment variables with defaults
-ENV TELEGRAF_CONFIG_PATH_IN="/input/telegraf.conf" \
+ENV PYTHONUNBUFFERED=1 \
+    TELEGRAF_CONFIG_PATH_IN="/input/telegraf.conf" \
     TELEGRAF_CONFIG_PATH_OUT="/output/telegraf.conf" \
     POLLING_INTERVAL="-1"
 
