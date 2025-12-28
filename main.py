@@ -123,6 +123,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                         return 'i'
                     return 'b'
 
+
                 ## Node ID configuration
                 ## name              - field name to use in the output
                 ## namespace         - OPC UA namespace of the node (integer value 0 through 3)
