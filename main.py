@@ -135,7 +135,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                 ## identifier_type   - OPC UA ID type (s=string, i=numeric, g=guid, b=opaque)
                 ## identifier        - OPC UA ID (tag as shown in opcua browser)
                 nodes_to_add.append({
-                    "name": browse_name.Name,
+                    "name": "value",
                     "namespace": str(node_id.NamespaceIndex),
                     "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
                     "identifier": node_id.Identifier,
