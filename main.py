@@ -103,7 +103,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
         try:
             node_class = await child.read_node_class()
             if node_class == ua.NodeClass.Variable:
-                # Skip Namespaces 0 and 1 as they are standard OPC UA nodes
+                # Skip Namespace 0 nodes (which are standard OPC UA nodes)
                 node_id = child.nodeid
                 if node_id.NamespaceIndex == 0:
                     continue
