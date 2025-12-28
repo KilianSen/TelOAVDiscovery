@@ -153,7 +153,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
             continue
 
 
-async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
+async def discover_nodes(endpoint: str, use_tui: bool = False) -> tuple[str, list[dict]]:
     global endpoint_stats, last_update_time
 
     logger.info(f"Starting discovery on endpoint: {endpoint}")
@@ -214,7 +214,7 @@ async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
             }
             last_update_time = datetime.now()
 
-        return []
+        return resolved_endpoint, []
     except Exception as e:
         logger.error(f"Unexpected error discovering nodes on {endpoint}: {e}", exc_info=True)
 
@@ -227,9 +227,9 @@ async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
             }
             last_update_time = datetime.now()
 
-        return []
+        return resolved_endpoint, []
 
-    return nodes_to_add
+    return resolved_endpoint, nodes_to_add
 
 
 def generate_tui_layout() -> Layout:
@@ -578,8 +578,11 @@ async def main_async():
         logger.info("Found %d endpoint(s) to monitor", len(endpoints_to_monitor))
 
         discovered_nodes_by_endpoint = {}
+        resolved_endpoints_map = {}
         for endpoint in endpoints_to_monitor:
-            discovered_nodes_by_endpoint[endpoint] = await discover_nodes(endpoint, use_tui=use_tui)
+            resolved, nodes = await discover_nodes(endpoint, use_tui=use_tui)
+            discovered_nodes_by_endpoint[endpoint] = nodes
+            resolved_endpoints_map[endpoint] = resolved
 
         inputs = toml_config.get("inputs", {})
         nodes_updated_count = 0
@@ -592,10 +595,24 @@ async def main_async():
                 endpoint = config_block.get("endpoint")
                 if endpoint and endpoint in discovered_nodes_by_endpoint:
                     nodes = discovered_nodes_by_endpoint[endpoint]
+                    resolved_endpoint = resolved_endpoints_map.get(endpoint)
+
+                    # Get existing config from OUT file to compare
+                    existing_block = output_toml.get("inputs", {}).get(input_type, [{} for _ in range(idx)])[idx] if output_toml else {}
+                    existing_nodes = existing_block.get("nodes", [])
+                    existing_endpoint = existing_block.get("endpoint", "")
+
+                    # Update endpoint in current config object
+                    if resolved_endpoint and resolved_endpoint != endpoint:
+                        config_block["endpoint"] = resolved_endpoint
+                        # We changed the in-memory config from Hostname to IP.
+                        # Now check if this change is different from what's on disk (OUT file)
+                        if existing_endpoint != resolved_endpoint:
+                            config_changed = True
+                            logger.debug(f"Endpoint changed in output: {existing_endpoint} -> {resolved_endpoint}")
+
                     if nodes:
                         # Check if nodes differ from existing config
-
-                        existing_nodes = output_toml.get("inputs", {}).get(input_type, [{} for _ in range(idx)])[idx].get("nodes", [])
 
                         if existing_nodes != nodes:
                             config_block["nodes"] = nodes
