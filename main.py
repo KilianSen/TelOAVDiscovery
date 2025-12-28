@@ -627,5 +627,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logger.info("Interrupted by user, exiting gracefully...")
     except Exception as e:
-        traceback.print_exc()
         logger.error("Fatal error: %s", e, exc_info=True)
+        traceback.print_exc()
