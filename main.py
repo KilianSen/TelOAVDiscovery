@@ -127,7 +127,7 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                         return 's'
                     return 'b'
 
-
+                print(node_id.NodeIdType)
 
                 ## Node ID configuration
                 ## name              - field name to use in the output
