@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.12-slim
 LABEL authors="KilianSen"
 LABEL org.opencontainers.image.authors="KilianSen"
 LABEL org.opencontainers.image.description="A OPCUA Discovery Service that generates Telegraf configuration"
@@ -18,8 +18,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+#
+COPY test/ ../input/
+
 # Copy application source
-COPY src/ ./src/
+COPY . .
 
 # Create input/output directories
 RUN mkdir -p /input /output
@@ -27,8 +30,7 @@ RUN mkdir -p /input /output
 # Set environment variables with defaults
 ENV TELEGRAF_CONFIG_PATH_IN="/input/telegraf.conf" \
     TELEGRAF_CONFIG_PATH_OUT="/output/telegraf.conf" \
-    POLLING_INTERVAL="-1" \
-    PYTHONUNBUFFERED=1
+    POLLING_INTERVAL="-1"
 
 # Run the application
-ENTRYPOINT ["python", "src/main.py"]
+CMD ["python", "main.py"]

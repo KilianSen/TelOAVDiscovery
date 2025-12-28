@@ -20,7 +20,7 @@ from rich.text import Text
 from rich.logging import RichHandler
 import logging
 
-from Config import config
+from src.Config import config
 
 INPUT_TYPES: set[Literal["opcua_listener", "opcua"]] = {"opcua_listener", "opcua"}
 
