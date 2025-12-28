@@ -119,9 +119,14 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                     data_type_name = "Unknown"
 
                 def get_node_id(identifier: Union[Int32, String, Guid, ByteString], namespace_index: Int16):
-                    if isinstance(identifier, int):
+                    if any(isinstance(identifier, t) for t in [Guid, ua.Guid]):
+                        return 'g'
+                    if any(isinstance(identifier, t) for t in [Int32, int,float]):
                         return 'i'
+                    if isinstance(identifier, str):
+                        return 's'
                     return 'b'
+
 
 
                 ## Node ID configuration
