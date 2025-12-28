@@ -1,11 +1,12 @@
 import asyncio
 import os
 import signal
+import socket
 import sys
 import tomllib
 import traceback
+from urllib.parse import urlparse, urlunparse
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import Literal, Union
 from datetime import datetime, timedelta
 from collections import deque
@@ -157,12 +158,35 @@ async def discover_nodes(endpoint: str, use_tui: bool = False) -> list[dict]:
 
     logger.info(f"Starting discovery on endpoint: {endpoint}")
 
+    resolved_endpoint = endpoint
+    try:
+        parsed = urlparse(endpoint)
+        if parsed.hostname:
+            loop = asyncio.get_running_loop()
+            # Use run_in_executor to avoid blocking the event loop during DNS resolution
+            ip = await loop.run_in_executor(None, socket.gethostbyname, parsed.hostname)
+
+            # Reconstruct URL with IP
+            if parsed.port:
+                new_netloc = f"{ip}:{parsed.port}"
+            else:
+                new_netloc = ip
+
+            parts = list(parsed)
+            parts[1] = new_netloc
+            resolved_endpoint = urlunparse(parts)
+
+            if endpoint != resolved_endpoint:
+                logger.info(f"Resolved endpoint {endpoint} to {resolved_endpoint}")
+    except Exception as e:
+        logger.debug(f"Failed to resolve hostname for {endpoint}: {e}")
+
     nodes_to_add = []
 
     try:
-        logger.debug(f"Connecting to {endpoint}...")
-        async with Client(url=endpoint) as client:
-            logger.debug(f"Connected to {endpoint}")
+        logger.debug(f"Connecting to {resolved_endpoint}...")
+        async with Client(url=resolved_endpoint) as client:
+            logger.debug(f"Connected to {resolved_endpoint}")
             objects_node = client.get_objects_node()
             await browse_recursive(objects_node, nodes_to_add)
 
