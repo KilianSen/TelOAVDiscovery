@@ -68,6 +68,7 @@ class ServiceConfig:
     POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling (only run once)
     TELEGRAF_CONFIG_PATH_IN: str = "./test/telegraf.conf"
     TELEGRAF_CONFIG_PATH_OUT: str = "./test/telegraf1.conf"
+    TAG_STRATEGY: str = "suffix"  # Options: "enable", "disable", "suffix"
 
 def endpoints_from_config(toml_config: dict) -> list[str]:
     inputs = toml_config.get("inputs", {})
@@ -93,7 +94,7 @@ def endpoints_from_config(toml_config: dict) -> list[str]:
     return endpoints_to_monitor
 
 
-async def browse_recursive(node, nodes_to_add: list[dict]):
+async def browse_recursive(node, nodes_to_add: list[dict], tag_strategy: str = "disable"):
     try:
         children = await node.get_children()
     except Exception as e:
@@ -128,32 +129,33 @@ async def browse_recursive(node, nodes_to_add: list[dict]):
                         return 's'
                     return 'b'
 
-                print(node_id.NodeIdType)
-
                 ## Node ID configuration
                 ## name              - field name to use in the output
                 ## namespace         - OPC UA namespace of the node (integer value 0 through 3)
                 ## identifier_type   - OPC UA ID type (s=string, i=numeric, g=guid, b=opaque)
                 ## identifier        - OPC UA ID (tag as shown in opcua browser)
-                nodes_to_add.append({
+                node_entry = {
                     "name": "value",
                     "namespace": str(node_id.NamespaceIndex),
                     "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
-                    "identifier": node_id.Identifier,
-                    # Tagging with default_tags as toml dictionary
-                    "default_tags": {
-                        "id": browse_name.Name
-                    }
-                })
+                    "identifier": node_id.Identifier
+                }
+
+                if tag_strategy == "enable":
+                    node_entry["default_tags"] = {"id": browse_name.Name}
+                elif tag_strategy == "suffix":
+                    node_entry["name"] = f"value_{browse_name.Name}"
+
+                nodes_to_add.append(node_entry)
                 logger.debug(f"Discovered node: {browse_name.Name} (ns={node_id.NamespaceIndex})")
 
-            await browse_recursive(child, nodes_to_add)
+            await browse_recursive(child, nodes_to_add, tag_strategy)
         except Exception as e:
             logger.debug(f"Error processing child node: {e}")
             continue
 
 
-async def discover_nodes(endpoint: str, use_tui: bool = False) -> tuple[str, list[dict]]:
+async def discover_nodes(endpoint: str, tag_strategy: str = "disable", use_tui: bool = False) -> tuple[str, list[dict]]:
     global endpoint_stats, last_update_time
 
     logger.info(f"Starting discovery on endpoint: {endpoint}")
@@ -188,7 +190,7 @@ async def discover_nodes(endpoint: str, use_tui: bool = False) -> tuple[str, lis
         async with Client(url=resolved_endpoint) as client:
             logger.debug(f"Connected to {resolved_endpoint}")
             objects_node = client.get_objects_node()
-            await browse_recursive(objects_node, nodes_to_add)
+            await browse_recursive(objects_node, nodes_to_add, tag_strategy)
 
         logger.info(f"Discovered {len(nodes_to_add)} nodes on {endpoint}")
 
@@ -580,7 +582,7 @@ async def main_async():
         discovered_nodes_by_endpoint = {}
         resolved_endpoints_map = {}
         for endpoint in endpoints_to_monitor:
-            resolved, nodes = await discover_nodes(endpoint, use_tui=use_tui)
+            resolved, nodes = await discover_nodes(endpoint, tag_strategy=service_config.TAG_STRATEGY, use_tui=use_tui)
             discovered_nodes_by_endpoint[endpoint] = nodes
             resolved_endpoints_map[endpoint] = resolved
 
