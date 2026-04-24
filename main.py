@@ -138,7 +138,7 @@ async def browse_recursive(node, nodes_to_add: list[dict], tag_strategy: str = "
                     "name": "value",
                     "namespace": str(node_id.NamespaceIndex),
                     "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
-                    "identifier": node_id.Identifier
+                    "identifier": f"{node_id.Identifier}"
                 }
 
                 if tag_strategy == "enable":
