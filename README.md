@@ -87,7 +87,20 @@ volumes:
 
 See [debug.toml](debug.toml) for configuration options.
 
-Key settings:
-- `POLLING_INTERVAL`: Seconds between discovery runs (-1 for single run)
-- `TELEGRAF_CONFIG_PATH_IN`: Input Telegraf configuration path
-- `TELEGRAF_CONFIG_PATH_OUT`: Output Telegraf configuration path
+### Key Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `POLLING_INTERVAL` | `60` | Seconds between discovery runs (-1 for single run) |
+| `TELEGRAF_CONFIG_PATH_IN` | `./test/telegraf.conf` | Input Telegraf configuration path |
+| `TELEGRAF_CONFIG_PATH_OUT` | `./test/telegraf1.conf` | Output Telegraf configuration path |
+| `NAMING_STRATEGY` | `suffix` | Pattern for field names: `plain`, `prefix`, `suffix`, `path` |
+| `ENABLE_ID_TAG` | `false` | If true, adds a default tag `id` with the browse name |
+| `INCLUDE_NS0` | `false` | If true, includes standard OPC UA nodes (Namespace 0) |
+
+### Naming Strategies
+
+- **`plain`**: Variable field is simply named `value`.
+- **`suffix`**: Named `value_VariableName` (useful for standard Telegraf compatibility).
+- **`prefix`**: Named `VariableName_value`.
+- **`path`**: Named with the full browse path (e.g., `Folder_SubFolder_Variable`). Recommended for complex servers to avoid name collisions.

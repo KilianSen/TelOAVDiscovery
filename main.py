@@ -68,7 +68,9 @@ class ServiceConfig:
     POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling (only run once)
     TELEGRAF_CONFIG_PATH_IN: str = "./test/telegraf.conf"
     TELEGRAF_CONFIG_PATH_OUT: str = "./test/telegraf1.conf"
-    TAG_STRATEGY: str = "suffix"  # Options: "enable", "disable", "suffix"
+    NAMING_STRATEGY: str = "suffix"  # Options: "plain", "prefix", "suffix", "path"
+    ENABLE_ID_TAG: bool = False      # Whether to add the 'id' tag to nodes
+    INCLUDE_NS0: bool = False        # Whether to include nodes from Namespace 0
 
 def endpoints_from_config(toml_config: dict) -> list[str]:
     inputs = toml_config.get("inputs", {})
@@ -94,7 +96,19 @@ def endpoints_from_config(toml_config: dict) -> list[str]:
     return endpoints_to_monitor
 
 
-async def browse_recursive(node, nodes_to_add: list[dict], tag_strategy: str = "disable"):
+def get_identifier_type(identifier: Union[Int32, String, Guid, ByteString, ua.Guid, int, float]) -> str:
+    if any(isinstance(identifier, t) for t in [Guid, ua.Guid]):
+        return 'g'
+    if any(isinstance(identifier, t) for t in [Int32, int, float]):
+        return 'i'
+    if isinstance(identifier, str):
+        return 's'
+    return 'b'
+
+async def browse_recursive(node, nodes_to_add: list[dict], seen_node_ids: set[str], naming_strategy: str = "plain", enable_id_tag: bool = False, include_ns0: bool = False, current_path: list[str] = None):
+    if current_path is None:
+        current_path = []
+        
     try:
         children = await node.get_children()
     except Exception as e:
@@ -103,59 +117,57 @@ async def browse_recursive(node, nodes_to_add: list[dict], tag_strategy: str = "
 
     for child in children:
         try:
+            node_id = child.nodeid
+            node_id_str = node_id.to_string()
+
+            # Issue 4: Deduplication
+            if node_id_str in seen_node_ids:
+                continue
+            seen_node_ids.add(node_id_str)
+
+            browse_name = await child.read_browse_name()
+            browse_name_str = browse_name.Name
+            
             node_class = await child.read_node_class()
             if node_class == ua.NodeClass.Variable:
-                # Skip Namespace 0 nodes (which are standard OPC UA nodes)
-                node_id = child.nodeid
-                if node_id.NamespaceIndex == 0:
+                # Issue 6: Configurable Namespace 0 exclusion
+                if not include_ns0 and node_id.NamespaceIndex == 0:
                     continue
 
-                browse_name = await child.read_browse_name()
-
-                # Get data type information
-                try:
-                    data_type = await child.read_data_type()
-                    data_type_name = data_type.to_string() if data_type else "Unknown"
-                except Exception as e:
-                    logger.debug(f"Failed to read data type for {browse_name.Name}: {e}")
-                    data_type_name = "Unknown"
-
-                def get_node_id(identifier: Union[Int32, String, Guid, ByteString], namespace_index: Int16):
-                    if any(isinstance(identifier, t) for t in [Guid, ua.Guid]):
-                        return 'g'
-                    if any(isinstance(identifier, t) for t in [Int32, int,float]):
-                        return 'i'
-                    if isinstance(identifier, str):
-                        return 's'
-                    return 'b'
-
                 ## Node ID configuration
-                ## name              - field name to use in the output
-                ## namespace         - OPC UA namespace of the node (integer value 0 through 3)
-                ## identifier_type   - OPC UA ID type (s=string, i=numeric, g=guid, b=opaque)
-                ## identifier        - OPC UA ID (tag as shown in opcua browser)
                 node_entry = {
                     "name": "value",
                     "namespace": str(node_id.NamespaceIndex),
-                    "identifier_type": get_node_id(node_id.Identifier, node_id.NamespaceIndex),
+                    "identifier_type": get_identifier_type(node_id.Identifier),
                     "identifier": f"{node_id.Identifier}"
                 }
 
-                if tag_strategy == "enable":
-                    node_entry["default_tags"] = {"id": browse_name.Name}
-                elif tag_strategy == "suffix":
-                    node_entry["name"] = f"value_{browse_name.Name}"
+                # Apply Naming Strategy
+                if naming_strategy == "suffix":
+                    node_entry["name"] = f"value_{browse_name_str}"
+                elif naming_strategy == "prefix":
+                    node_entry["name"] = f"{browse_name_str}_value"
+                elif naming_strategy == "path":
+                    full_path = current_path + [browse_name_str]
+                    node_entry["name"] = "_".join(full_path)
+                else:
+                    node_entry["name"] = "value"
+
+                # Apply Tagging Strategy (Independent)
+                if enable_id_tag:
+                    node_entry["default_tags"] = {"id": browse_name_str}
 
                 nodes_to_add.append(node_entry)
-                logger.debug(f"Discovered node: {browse_name.Name} (ns={node_id.NamespaceIndex})")
+                logger.debug(f"Discovered node: {browse_name_str} (ns={node_id.NamespaceIndex})")
 
-            await browse_recursive(child, nodes_to_add, tag_strategy)
+            # Always recurse to find nested variables/objects
+            await browse_recursive(child, nodes_to_add, seen_node_ids, naming_strategy, enable_id_tag, include_ns0, current_path + [browse_name_str])
         except Exception as e:
             logger.debug(f"Error processing child node: {e}")
             continue
 
 
-async def discover_nodes(endpoint: str, tag_strategy: str = "disable", use_tui: bool = False) -> tuple[str, list[dict]]:
+async def discover_nodes(endpoint: str, naming_strategy: str = "plain", enable_id_tag: bool = False, include_ns0: bool = False, use_tui: bool = False) -> tuple[str, list[dict]]:
     global endpoint_stats, last_update_time
 
     logger.info(f"Starting discovery on endpoint: {endpoint}")
@@ -184,13 +196,14 @@ async def discover_nodes(endpoint: str, tag_strategy: str = "disable", use_tui: 
         logger.debug(f"Failed to resolve hostname for {endpoint}: {e}")
 
     nodes_to_add = []
+    seen_node_ids = set()
 
     try:
         logger.debug(f"Connecting to {resolved_endpoint}...")
         async with Client(url=resolved_endpoint) as client:
             logger.debug(f"Connected to {resolved_endpoint}")
             objects_node = client.get_objects_node()
-            await browse_recursive(objects_node, nodes_to_add, tag_strategy)
+            await browse_recursive(objects_node, nodes_to_add, seen_node_ids, naming_strategy, enable_id_tag, include_ns0)
 
         logger.info(f"Discovered {len(nodes_to_add)} nodes on {endpoint}")
 
@@ -534,8 +547,11 @@ async def main_async():
 
     # Initially copy existing config to output path
     try:
-        with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f_in, open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f_out:
-            f_out.write(f_in.read())
+        import aiofiles
+        async with aiofiles.open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f_in:
+            content = await f_in.read()
+        async with aiofiles.open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f_out:
+            await f_out.write(content)
     except Exception as e:
         logger.error("Failed to copy initial config file: %s", e)
 
@@ -550,9 +566,9 @@ async def main_async():
         logger.info("Reading Telegraf configuration from %s", service_config.TELEGRAF_CONFIG_PATH_IN)
 
         try:
-            data = None
-            with open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f:
-                data = f.read()
+            import aiofiles
+            async with aiofiles.open(service_config.TELEGRAF_CONFIG_PATH_IN, "rb") as f:
+                data = await f.read()
             toml_config = tomllib.loads(data.decode("utf-8"))
 
             if data != last_config_in:
@@ -567,24 +583,45 @@ async def main_async():
             return
 
         try:
-            with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
-                output_toml = tomllib.load(f)
+            async with aiofiles.open(service_config.TELEGRAF_CONFIG_PATH_OUT, "rb") as f:
+                output_data = await f.read()
+                output_toml = tomllib.loads(output_data.decode("utf-8"))
         except FileNotFoundError:
             output_toml = None
             config_changed = True
         except Exception as e:
-            logger.error("Failed to read configuration: %s", e)
+            logger.error("Failed to read output configuration: %s", e)
             return
 
         endpoints_to_monitor = endpoints_from_config(toml_config)
         logger.info("Found %d endpoint(s) to monitor", len(endpoints_to_monitor))
 
+        # Parallelize discovery
+        discovery_tasks = [
+            discover_nodes(
+                endpoint, 
+                naming_strategy=service_config.NAMING_STRATEGY, 
+                enable_id_tag=service_config.ENABLE_ID_TAG,
+                include_ns0=service_config.INCLUDE_NS0, 
+                use_tui=use_tui
+            )
+            for endpoint in endpoints_to_monitor
+        ]
+        
+        results = await asyncio.gather(*discovery_tasks, return_exceptions=True)
+        
         discovered_nodes_by_endpoint = {}
         resolved_endpoints_map = {}
-        for endpoint in endpoints_to_monitor:
-            resolved, nodes = await discover_nodes(endpoint, tag_strategy=service_config.TAG_STRATEGY, use_tui=use_tui)
-            discovered_nodes_by_endpoint[endpoint] = nodes
-            resolved_endpoints_map[endpoint] = resolved
+        
+        for endpoint, result in zip(endpoints_to_monitor, results):
+            if isinstance(result, Exception):
+                logger.error(f"Error discovering nodes for {endpoint}: {result}")
+                discovered_nodes_by_endpoint[endpoint] = []
+                resolved_endpoints_map[endpoint] = endpoint
+            else:
+                resolved, nodes = result
+                discovered_nodes_by_endpoint[endpoint] = nodes
+                resolved_endpoints_map[endpoint] = resolved
 
         inputs = toml_config.get("inputs", {})
         nodes_updated_count = 0
@@ -593,29 +630,28 @@ async def main_async():
             if input_type not in inputs:
                 continue
 
-            for idx, config_block in enumerate(inputs.get(input_type, [])):
+            input_blocks = inputs.get(input_type, [])
+            output_blocks = output_toml.get("inputs", {}).get(input_type, []) if output_toml else []
+
+            for idx, config_block in enumerate(input_blocks):
                 endpoint = config_block.get("endpoint")
                 if endpoint and endpoint in discovered_nodes_by_endpoint:
                     nodes = discovered_nodes_by_endpoint[endpoint]
                     resolved_endpoint = resolved_endpoints_map.get(endpoint)
 
-                    # Get existing config from OUT file to compare
-                    existing_block = output_toml.get("inputs", {}).get(input_type, [{} for _ in range(idx)])[idx] if output_toml else {}
+                    # Safely get existing config from OUT file to compare
+                    existing_block = output_blocks[idx] if idx < len(output_blocks) else {}
                     existing_nodes = existing_block.get("nodes", [])
                     existing_endpoint = existing_block.get("endpoint", "")
 
                     # Update endpoint in current config object
                     if resolved_endpoint and resolved_endpoint != endpoint:
                         config_block["endpoint"] = resolved_endpoint
-                        # We changed the in-memory config from Hostname to IP.
-                        # Now check if this change is different from what's on disk (OUT file)
                         if existing_endpoint != resolved_endpoint:
                             config_changed = True
                             logger.debug(f"Endpoint changed in output: {existing_endpoint} -> {resolved_endpoint}")
 
                     if nodes:
-                        # Check if nodes differ from existing config
-
                         if existing_nodes != nodes:
                             config_block["nodes"] = nodes
                             nodes_updated_count += 1
@@ -628,11 +664,11 @@ async def main_async():
                     else:
                         logger.warning("No nodes discovered for endpoint %s, skipping update", endpoint)
 
-
         if config_changed:
             try:
-                with open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
-                    tomli_w.dump(toml_config, f)
+                output_content = tomli_w.dumps(toml_config)
+                async with aiofiles.open(service_config.TELEGRAF_CONFIG_PATH_OUT, "wb") as f:
+                    await f.write(output_content.encode("utf-8"))
                 logger.info("Updated Telegraf config written to %s (%d endpoint(s) updated)",
                             service_config.TELEGRAF_CONFIG_PATH_OUT, nodes_updated_count)
             except Exception as e:
