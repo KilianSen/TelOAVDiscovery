@@ -41,6 +41,13 @@ async def browse_recursive(node, nodes_to_add: List[dict], seen_node_ids: Set[st
                 continue
             seen_node_ids.add(node_id_str)
 
+            # Skip the standard Server node subtree (i=2253) unless ns0 is
+            # explicitly requested. Some servers expose session/subscription
+            # diagnostics *instances* under Server in a non-zero namespace, so
+            # the NamespaceIndex == 0 filter alone doesn't keep them out.
+            if not include_ns0 and node_id.NamespaceIndex == 0 and node_id.Identifier == ua.ObjectIds.Server:
+                continue
+
             browse_name = await child.read_browse_name()
             browse_name_str = browse_name.Name
             

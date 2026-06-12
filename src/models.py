@@ -12,7 +12,7 @@ class ServiceConfig:
     POLLING_INTERVAL: int = -1 # Value in seconds, -1 means no polling (only run once)
     TELEGRAF_CONFIG_PATH_IN: str = "./test/telegraf.conf"
     TELEGRAF_CONFIG_PATH_OUT: str = "./test/telegraf1.conf"
-    NAMING_STRATEGY: str = "suffix"  # Options: "plain", "prefix", "suffix", "path"
+    NAMING_STRATEGY: str = "path"  # Options: "plain", "prefix", "suffix", "path"
     ENABLE_ID_TAG: bool = False      # Whether to add the 'id' tag to nodes
     INCLUDE_NS0: bool = False        # Whether to include nodes from Namespace 0
 
