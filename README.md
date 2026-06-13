@@ -1,5 +1,8 @@
 # Telegraf OPCUA Discovery Service
 
+## Deprecation: There is no real standard reason to use this, besides on demand rediscover. If you have the very specifc issue we have, good luck!
+
+
 This repository contains a docker container, that automatically discovers OPCUA Variables from a given OPCUA Server
 and creates/updates a Telegraf configuration file with the discovered variables.
 
