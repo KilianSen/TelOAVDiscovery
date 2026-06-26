@@ -73,6 +73,10 @@ async def browse_recursive(node, nodes_to_add: List[dict], seen_node_ids: Set[st
                 elif naming_strategy == "path":
                     full_path = current_path + [browse_name_str]
                     node_entry["name"] = "_".join(full_path)
+                elif naming_strategy in ("browsename", "name"):
+                    # Field name == browse name (e.g. "P_CC"). Produces one
+                    # column per tag, matching a hand-written explicit group.
+                    node_entry["name"] = browse_name_str
                 else:
                     node_entry["name"] = "value"
 

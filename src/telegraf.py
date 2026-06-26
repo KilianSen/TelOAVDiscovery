@@ -7,6 +7,25 @@ logger = logging.getLogger("TelOAVDiscovery")
 
 INPUT_TYPES: Set[Literal["opcua_listener", "opcua"]] = {"opcua_listener", "opcua"}
 
+
+def node_container(block: dict) -> dict:
+    """Return the dict whose 'nodes' key should hold the discovered nodes.
+
+    If the input block defines one or more groups, the first group is used so
+    that group-level settings authored in the template (most importantly
+    ``sampling_interval``) are preserved and applied to every discovered node.
+    Some OPC UA servers treat the default sampling interval of 0 as "send the
+    initial value once, then never sample again", so a non-zero group sampling
+    interval is the difference between a live stream and a single snapshot.
+
+    When no group is present the input block itself is returned, preserving the
+    original input-level ``nodes`` behaviour for backwards compatibility.
+    """
+    groups = block.get("group")
+    if isinstance(groups, list) and groups:
+        return groups[0]
+    return block
+
 def endpoints_from_config(toml_config: dict) -> List[str]:
     """Extract OPC UA endpoints from Telegraf configuration"""
     inputs = toml_config.get("inputs", {})
@@ -55,8 +74,13 @@ def update_telegraf_config(
 
                 # Safely get existing config from OUT file to compare
                 existing_block = output_blocks[idx] if idx < len(output_blocks) else {}
-                existing_nodes = existing_block.get("nodes", [])
+                existing_nodes = node_container(existing_block).get("nodes", []) if existing_block else []
                 existing_endpoint = existing_block.get("endpoint", "")
+
+                # Discovered nodes go into the group (if any) so the template's
+                # group-level sampling_interval is preserved; otherwise at the
+                # input level as before.
+                target = node_container(config_block)
 
                 # Update endpoint in current config object
                 if resolved_endpoint and resolved_endpoint != endpoint:
@@ -67,7 +91,7 @@ def update_telegraf_config(
 
                 if nodes:
                     if existing_nodes != nodes:
-                        config_block["nodes"] = nodes
+                        target["nodes"] = nodes
                         nodes_updated_count += 1
                         config_changed = True
                         logger.debug("Updated configuration for endpoint: %s", endpoint)

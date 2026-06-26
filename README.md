@@ -107,3 +107,31 @@ See [debug.toml](debug.toml) for configuration options.
 - **`suffix`**: Named `value_VariableName` (useful for standard Telegraf compatibility).
 - **`prefix`**: Named `VariableName_value`.
 - **`path`**: Named with the full browse path (e.g., `Folder_SubFolder_Variable`). Recommended for complex servers to avoid name collisions.
+- **`browsename`** (alias `name`): Field is named after the browse name (e.g., `P_CC`), giving one column per tag. Matches a hand-written explicit group/node config.
+
+### Groups and sampling interval
+
+If the input block in your template defines a node group, discovered nodes are
+injected into the **first group** instead of at the input level, and the rest of
+the group's settings are preserved. This is the supported way to apply a
+`sampling_interval` (and other `monitoring_params`) to discovered nodes, since
+inline input-level nodes cannot carry them.
+
+Some OPC UA servers treat the default sampling interval of `0` as *"send the
+initial value once, then never sample again"*, so the subscription delivers a
+single snapshot and goes silent. Authoring a non-zero group `sampling_interval`
+in the template fixes this:
+
+```toml
+[[inputs.opcua_listener]]
+  endpoint = "opc.tcp://server:4840"
+  subscription_interval = "50ms"
+
+  [[inputs.opcua_listener.group]]
+    name = "opcua"
+    sampling_interval = "10ms"   # preserved; applied to every discovered node
+    nodes = []                   # filled in by TelOAVDiscovery
+```
+
+When no group is present, nodes are written at the input level as before
+(backwards compatible).
